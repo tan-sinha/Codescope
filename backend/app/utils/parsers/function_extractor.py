@@ -2,7 +2,7 @@
 
 from typing import List
 
-from ...models import FunctionInfo, Parameter
+from app.data.function import FunctionInfo, Parameter
 
 
 def extract_functions(root, file_bytes: bytes) -> List[FunctionInfo]:
@@ -131,12 +131,11 @@ def _extract_single_parameter(
 
     # x: str
     if node.type == "typed_parameter":
-        name_node = node.child_by_field_name(
-            "name"
-        )
-        type_node = node.child_by_field_name(
-            "type"
-        )
+        name_node = node.child_by_field_name("name")
+        type_node = node.child_by_field_name("type")
+
+        if not name_node:
+            return None
 
         return Parameter(
             name=_node_text(name_node, file_bytes),
@@ -149,9 +148,10 @@ def _extract_single_parameter(
 
     # x=5
     if node.type == "default_parameter":
-        name_node = node.child_by_field_name(
-            "name"
-        )
+        name_node = node.child_by_field_name("name")
+
+        if not name_node:
+            return None
 
         return Parameter(
             name=_node_text(name_node, file_bytes)
@@ -159,12 +159,11 @@ def _extract_single_parameter(
 
     # x: str = "abc"
     if node.type == "typed_default_parameter":
-        name_node = node.child_by_field_name(
-            "name"
-        )
-        type_node = node.child_by_field_name(
-            "type"
-        )
+        name_node = node.child_by_field_name("name")
+        type_node = node.child_by_field_name("type")
+
+        if not name_node:
+            return None
 
         return Parameter(
             name=_node_text(name_node, file_bytes),

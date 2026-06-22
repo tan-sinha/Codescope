@@ -1,12 +1,5 @@
 from pathlib import Path
-import os
 from app.data.import_info import ImportInfo
-
-names = []
-aliases = {}
-module = ""
-is_relative = False
-relative_level = 0
 
 
 def extract_imports(
@@ -21,19 +14,22 @@ def extract_imports(
             "import_statement",
             "import_from_statement",
         ):
-            imports.append(
-                _extract_import(
-                    node,
-                    file_bytes,
-                    file_path,
-                )
+            result = _extract_import(
+                node,
+                file_bytes,
+                file_path,
             )
+            if isinstance(result, list):
+                imports.extend(result)
+            elif result is not None:
+                imports.append(result)
 
         for child in node.children:
             walk(child)
 
     walk(root)
     return imports
+
 
 def _extract_import(
     node,
@@ -44,7 +40,6 @@ def _extract_import(
         return _extract_import_statement(
             node,
             file_bytes,
-            file_path,
         )
 
     return _extract_import_from(
@@ -53,55 +48,50 @@ def _extract_import(
         file_path,
     )
 
+
 def _extract_import_statement(
     node,
     file_bytes,
-    file_path,
 ):
-    names = []
+    results = []
 
     for child in node.children:
-
-        if child.type == "relative_import":
-            is_relative = True
-            relative_level = len(
-                _text(child, file_bytes)
-            )
-
-        elif child.type == "aliased_import":
+        if child.type == "aliased_import":
+            names = []
+            aliases = {}
             _extract_aliased_import(
                 child,
                 file_bytes,
                 names,
                 aliases,
             )
+            for name in names:
+                results.append(ImportInfo(
+                    module=name,
+                    names=[name],
+                    aliases=aliases,
+                    is_relative=False,
+                ))
 
         elif child.type == "dotted_name":
-            value = _text(
-                child,
-                file_bytes,
-            )
-
-            if value != module:
-                names.append(value)
+            name = _text(child, file_bytes)
+            results.append(ImportInfo(
+                module=name,
+                names=[name],
+                is_relative=False,
+            ))
 
         elif child.type == "identifier":
-            value = _text(
-                child,
-                file_bytes,
-            )
+            value = _text(child, file_bytes)
+            if value not in ("from", "import"):
+                results.append(ImportInfo(
+                    module=value,
+                    names=[value],
+                    is_relative=False,
+                ))
 
-            if value not in (
-                "from",
-                "import",
-            ):
-                names.append(value)
+    return results
 
-    return ImportInfo(
-        module=names[0],
-        names=names,
-        is_relative=False,
-    )
 
 def _extract_import_from(
     node,
@@ -110,7 +100,9 @@ def _extract_import_from(
 ):
     module = ""
     names = []
+    aliases = {}
     is_relative = False
+    relative_level = 0
 
     module_node = node.child_by_field_name(
         "module_name"
@@ -125,22 +117,26 @@ def _extract_import_from(
     for child in node.children:
         if child.type == "relative_import":
             is_relative = True
+            relative_level = _text(
+                child, file_bytes
+            ).count(".")
 
-        if child.type == "dotted_name":
+        elif child.type == "aliased_import":
+            _extract_aliased_import(
+                child,
+                file_bytes,
+                names,
+                aliases,
+            )
+
+        elif child.type == "dotted_name":
             names.append(
                 _text(child, file_bytes)
             )
 
-        if child.type == "identifier":
-            value = _text(
-                child,
-                file_bytes
-            )
-
-            if value not in (
-                "from",
-                "import",
-            ):
+        elif child.type == "identifier":
+            value = _text(child, file_bytes)
+            if value not in ("from", "import"):
                 names.append(value)
 
     resolved = None
@@ -149,6 +145,7 @@ def _extract_import_from(
         resolved = resolve_relative_import(
             file_path,
             module,
+            relative_level,
         )
 
     return ImportInfo(
@@ -159,6 +156,7 @@ def _extract_import_from(
         relative_level=relative_level,
         resolved_path=resolved,
     )
+
 
 def _extract_aliased_import(
     node,
@@ -188,6 +186,7 @@ def _extract_aliased_import(
     if original and alias:
         aliases[alias] = original
 
+
 def resolve_relative_import(
     file_path: str,
     module: str,
@@ -201,12 +200,12 @@ def resolve_relative_import(
     if module:
         current = current / module.replace(".", "/")
 
-    py_file = current.with_suffix(".py")
+    if current.name:
+        py_file = current.with_suffix(".py")
+        if py_file.exists():
+            return str(py_file)
+
     init_file = current / "__init__.py"
-
-    if py_file.exists():
-        return str(py_file)
-
     if init_file.exists():
         return str(init_file)
 

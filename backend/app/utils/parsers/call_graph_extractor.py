@@ -245,7 +245,8 @@ def build_reverse_graph(
     return dict(called_by)
 
 def build_call_graph(
-    repo_functions,
+    file_trees,
+    function_index,
     repo_imports,
 ):
     call_edges = []
@@ -254,16 +255,16 @@ def build_call_graph(
     source_stats = ResolutionStats()
     test_stats = ResolutionStats()
 
-    for file_path, data in repo_functions.items():
+    for file_path, data in file_trees.items():
 
-        root = data["tree"]
+        root = data["tree"].root_node
         file_bytes = data["bytes"]
 
         edges = extract_call_graph(
             root=root,
             file_bytes=file_bytes,
             file_path=file_path,
-            function_index=repo_functions,
+            function_index=function_index,
             import_index=repo_imports,
         )
 

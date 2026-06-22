@@ -17,3 +17,6 @@ class FunctionInfo:
     source_code: str = ""
     start_line: int = 0
     end_line: int = 0
+
+    summary: str | None = None
+    summary_source: str | None = None

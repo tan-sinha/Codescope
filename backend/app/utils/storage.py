@@ -4,9 +4,7 @@ knowledge_store: Dict[str, Any] = {}
 
 
 def save_inventory(repo_key: str, files):
-    knowledge_store[repo_key] = {
-        "files": files
-    }
+    knowledge_store[repo_key] = files
 
 
 def get_inventory(repo_key: str):
