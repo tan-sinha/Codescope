@@ -108,6 +108,8 @@ def _extract_parameters(
             "typed_parameter",
             "default_parameter",
             "typed_default_parameter",
+            "list_splat_pattern",
+            "dictionary_splat_pattern",
         ):
             param = _extract_single_parameter(
                 child,
@@ -129,12 +131,12 @@ def _extract_single_parameter(
             name=_node_text(node, file_bytes)
         )
 
-    # x: str
+    # x: str  — "name" has no field tag; identifier is always children[0]
     if node.type == "typed_parameter":
-        name_node = node.child_by_field_name("name")
+        name_node = node.children[0] if node.children else None
         type_node = node.child_by_field_name("type")
 
-        if not name_node:
+        if not name_node or name_node.type != "identifier":
             return None
 
         return Parameter(
@@ -173,6 +175,18 @@ def _extract_single_parameter(
                 else None
             ),
         )
+
+    if node.type == "list_splat_pattern":
+        for child in node.children:
+            if child.type == "identifier":
+                return Parameter(name=f"*{_node_text(child, file_bytes)}")
+        return None
+
+    if node.type == "dictionary_splat_pattern":
+        for child in node.children:
+            if child.type == "identifier":
+                return Parameter(name=f"**{_node_text(child, file_bytes)}")
+        return None
 
     return None
 

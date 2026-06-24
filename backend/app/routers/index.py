@@ -16,6 +16,11 @@ from app.utils.parsers.class_extractor import extract_classes
 from app.utils.parsers.import_extractor import extract_imports
 from app.utils.parsers.call_graph_extractor import build_call_graph
 
+from app.utils.search.documents import build_search_documents
+from app.utils.search.faiss_index import build_faiss_index
+from app.utils.search.bm25_index import build_bm25_index
+from app.utils.search.persistence import save_indexes
+
 from app.utils.module_builder import build_module
 from app.utils.summarizer import (
     generate_module_summary,
@@ -45,9 +50,7 @@ def index_repo(request: IndexRequest):
             request.repo,
         )
 
-        files = build_python_inventory(
-            repo_path
-        )
+        files = build_python_inventory(repo_path)
 
         file_trees = {}
         modules = {}
@@ -56,66 +59,37 @@ def index_repo(request: IndexRequest):
         imports_index = {}
 
         for file_path in files:
-            tree, file_bytes = _parse_file(
-                repo_path / file_path
-            )
+            tree, file_bytes = _parse_file(repo_path / file_path)
 
             file_trees[file_path] = {
                 "tree": tree,
                 "bytes": file_bytes,
             }
 
-            functions = extract_functions(
-                tree.root_node,
-                file_bytes,
-            )
+            functions = extract_functions(tree.root_node, file_bytes)
+            classes = extract_classes(tree.root_node, file_bytes)
+            imports = extract_imports(tree.root_node, file_bytes, file_path)
 
-            classes = extract_classes(
-                tree.root_node,
-                file_bytes,
-            )
+            generate_function_summaries(functions)
 
-            imports = extract_imports(
-                tree.root_node,
-                file_bytes,
-                file_path,
-            )
-
-            generate_function_summaries(
-                functions
-            )
-
-            module = build_module(
-                file_path,
-                functions,
-                classes,
-                imports,
-            )
-
-            generate_module_summary(
-                module
-            )
+            module = build_module(file_path, functions, classes, imports)
+            generate_module_summary(module)
 
             modules[file_path] = module
             imports_index[file_path] = imports
 
             for fn in functions:
-                key = f"{file_path}::{fn.name}"
-                functions_index[key] = fn
+                functions_index[f"{file_path}::{fn.name}"] = fn
 
             for cls in classes:
-                key = f"{file_path}::{cls.name}"
-                classes_index[key] = cls
+                classes_index[f"{file_path}::{cls.name}"] = cls
 
-        call_graph = build_call_graph(
-            file_trees,
-            functions_index,
-            imports_index,
-        )
+        call_graph = build_call_graph(file_trees, functions_index, imports_index)
 
         save_inventory(
             repo_key,
             {
+                "repo_key": repo_key,
                 "files": files,
                 "modules": modules,
                 "functions": functions_index,
@@ -125,7 +99,22 @@ def index_repo(request: IndexRequest):
             },
         )
 
+
+
         set_status(repo_key, "ready")
+
+        #Build documents and save FAISS + BM25 indexes
+      
+        documents, mapping = build_search_documents(
+            modules,
+            functions_index,
+            classes_index,
+            call_graph,
+        )
+        faiss_index = build_faiss_index(documents)
+        bm25, corpus = build_bm25_index(documents)
+        save_indexes(request.owner, request.repo, faiss_index, corpus, mapping)
+
 
         return {
             "owner": request.owner,
@@ -138,7 +127,4 @@ def index_repo(request: IndexRequest):
 
     except Exception as e:
         set_status(repo_key, "not_indexed")
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
-        )
+        raise HTTPException(status_code=500, detail=str(e))
