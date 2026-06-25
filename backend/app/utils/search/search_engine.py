@@ -4,7 +4,8 @@ from pathlib import Path
 from app.utils.search.faiss_index import model
 from app.utils.search.tokenizer import code_tokenize
 
-MIN_SCORE = 0.020
+MIN_SCORE = 0.015          # fix 4: was 0.020
+FAISS_WEIGHT = 2.0         # fix 1: FAISS weighted 2x over BM25 in RRF
 
 
 def bm25_search(query, bm25, mapping, limit=20):
@@ -28,13 +29,14 @@ def faiss_search(query, faiss_index, mapping, limit=20):
 
 
 def reciprocal_rank_fusion(bm25_results, faiss_results, k=60):
+    # fix 1: FAISS contributes FAISS_WEIGHT× more than BM25
     scores = defaultdict(float)
 
     for rank, (doc_id, _) in enumerate(bm25_results):
-        scores[doc_id] += 1 / (k + rank + 1)
+        scores[doc_id] += 1.0 / (k + rank + 1)
 
     for rank, (doc_id, _) in enumerate(faiss_results):
-        scores[doc_id] += 1 / (k + rank + 1)
+        scores[doc_id] += FAISS_WEIGHT / (k + rank + 1)
 
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
@@ -54,6 +56,15 @@ def _apply_file_boost(fused, file_stem: str, boost: float = 3.0):
             score *= boost
         boosted.append((identifier, score))
     return sorted(boosted, key=lambda x: x[1], reverse=True)
+
+
+def _pin_exact_match(flat: list, query: str) -> list:
+    # fix 2: if the query exactly matches a result's name, move it to position 0
+    query_norm = query.strip().lower()
+    for i, r in enumerate(flat):
+        if r["name"].lower() == query_norm:
+            return [flat[i]] + flat[:i] + flat[i + 1:]
+    return flat
 
 
 def _short_summary(text: str | None, max_chars: int = 300) -> str | None:
@@ -154,7 +165,8 @@ def _deduplicate(results):
 
 
 def _group_by_file(results):
-    """Group results by file, ordered by each file's highest relevance score."""
+    """Group results by file, ordered by each file's highest relevance score.
+    Items within each group are sorted by individual relevance_score descending."""  # fix 3
     groups: dict[str, list] = {}
     max_scores: dict[str, float] = {}
 
@@ -167,7 +179,7 @@ def _group_by_file(results):
         {
             "file": f,
             "relevance_score": round(max_scores[f], 4),
-            "items": groups[f],
+            "items": sorted(groups[f], key=lambda r: r["relevance_score"], reverse=True),  # fix 3
         }
         for f in sorted(groups, key=lambda f: max_scores[f], reverse=True)
     ]
@@ -202,5 +214,7 @@ def hybrid_search(query, knowledge_store, faiss_index, bm25, mapping, limit=10, 
             flat.append(result)
             if len(flat) == limit:
                 break
+
+    flat = _pin_exact_match(flat, query)   # fix 2
 
     return _group_by_file(_deduplicate(flat))
