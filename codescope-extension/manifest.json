@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Codescope",
+  "version": "0.1.0",
+  "description": "Code intelligence side panel for GitHub repositories",
+  "permissions": ["sidePanel", "tabs", "activeTab", "storage"],
+  "host_permissions": [
+    "https://github.com/*",
+    "http://localhost:8000/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*/*"],
+      "js": ["content/content.ts"],
+      "run_at": "document_end"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel/index.html"
+  },
+  "action": {
+    "default_title": "Open Codescope"
+  },
+  "icons": {
+    "16": "public/icons.svg",
+    "48": "public/icons.svg",
+    "128": "public/icons.svg"
+  }
+}

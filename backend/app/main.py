@@ -12,6 +12,6 @@ app.include_router(explore_router)
 app.include_router(search_router)
 app.include_router(graph_router)
 
-@app.get("/")
+@app.get("/health")
 def health():
     return {"status": "ok"}
