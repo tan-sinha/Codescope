@@ -37,6 +37,8 @@ export interface ModuleInfo {
   classes: string[];
   imports: string[];
   summary: string | null;
+  narrative: string | null;
+  workflow_steps: string[];
 }
 
 export interface ImportInfo {
@@ -116,7 +118,31 @@ export interface FileDetail {
   imports: ImportInfo[];
 }
 
-export type View = 'search' | 'explorer' | 'graph';
+export interface CallersResponse {
+  callers: string[];
+}
+
+export interface CodemapSubsystem {
+  name: string;
+  description: string;
+  key_files: string[];
+  entry_function: string;
+  flow_steps: string[];
+}
+
+export interface CodemapData {
+  summary: string;
+  tech_stack: string[];
+  entry_points: string[];
+  subsystems: CodemapSubsystem[];
+  readme_used: boolean;
+  readme_features: string[];
+  file_count: number;
+  function_count: number;
+  class_count: number;
+}
+
+export type View = 'codemap' | 'search' | 'explorer' | 'graph';
 
 export type SearchMode = 'hybrid' | 'bm25' | 'faiss';
 

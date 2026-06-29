@@ -4,6 +4,14 @@ import { useApi } from '../hooks/useApi';
 import { ResultCard } from './ResultCard';
 import type { SearchGroup, SearchItem, SearchMode } from '../state/types';
 
+const EXAMPLE_QUERIES = [
+  'where is routing handled',
+  'how does error handling work',
+  'what does the request context do',
+  'where is authentication',
+  'how are templates rendered',
+];
+
 function normaliseScores(groups: SearchGroup[]): SearchGroup[] {
   const all = groups.flatMap((g) => g.items.map((i) => i.relevance_score));
   const max = Math.max(...all, 1e-6);
@@ -12,6 +20,12 @@ function normaliseScores(groups: SearchGroup[]): SearchGroup[] {
     relevance_score: g.relevance_score / max,
     items: g.items.map((i) => ({ ...i, relevance_score: i.relevance_score / max })),
   }));
+}
+
+function flattenItems(groups: SearchGroup[]) {
+  return groups.flatMap((g) =>
+    g.items.map((item) => ({ name: item.name, file: g.file, summary: item.summary ?? undefined }))
+  );
 }
 
 function Spinner() {
@@ -31,21 +45,19 @@ export function SearchView() {
   const [mode, setMode] = useState<SearchMode>('hybrid');
   const [groups, setGroups] = useState<SearchGroup[]>([]);
   const [searched, setSearched] = useState(false);
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [synthesizing, setSynthesizing] = useState(false);
 
-  // The embedding model is cached after first inference; only show spinner then.
   const modelWarm = useRef(false);
   const showSpinner = loading && !modelWarm.current;
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim() || !owner || !repo) return;
+    setAnswer(null);
 
     const res = await post<{ results: SearchGroup[] }>('/search', {
-      owner,
-      repo,
-      query,
-      limit: 10,
-      mode,
+      owner, repo, query, limit: 10, mode,
     });
 
     if (res) {
@@ -55,7 +67,19 @@ export function SearchView() {
     }
   }
 
+  async function handleSynthesize() {
+    if (!groups.length) return;
+    setSynthesizing(true);
+    setAnswer(null);
+    const res = await post<{ answer: string }>('/synthesize', {
+      owner, repo, query, results: flattenItems(groups),
+    });
+    setSynthesizing(false);
+    if (res?.answer) setAnswer(res.answer);
+  }
+
   const noRepo = !owner || !repo;
+  const totalItems = groups.reduce((n, g) => n + g.items.length, 0);
 
   return (
     <div className="search-view">
@@ -83,10 +107,43 @@ export function SearchView() {
         </div>
       </form>
 
-      {showSpinner && <Spinner />}
+      {/* Example queries shown before first search */}
+      {!searched && !noRepo && (
+        <div className="search-view__examples">
+          <p className="search-view__examples-label">Try asking:</p>
+          {EXAMPLE_QUERIES.map((q) => (
+            <button
+              key={q}
+              className="search-view__example-chip"
+              onClick={() => setQuery(q)}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {error && !showSpinner && (
-        <p className="search-view__error">{error}</p>
+      {showSpinner && <Spinner />}
+      {error && !showSpinner && <p className="search-view__error">{error}</p>}
+
+      {/* Synthesize button + answer */}
+      {searched && groups.length > 0 && (
+        <div className="search-view__synthesize-bar">
+          <span className="search-view__result-count">{totalItems} results</span>
+          <button
+            className="search-view__synthesize-btn"
+            onClick={handleSynthesize}
+            disabled={synthesizing}
+          >
+            {synthesizing ? '…' : '✦ Explain'}
+          </button>
+        </div>
+      )}
+
+      {answer && (
+        <div className="search-view__answer">
+          <p className="search-view__answer-text">{answer}</p>
+        </div>
       )}
 
       {searched && groups.length === 0 && !loading && (

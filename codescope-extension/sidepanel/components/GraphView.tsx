@@ -60,10 +60,8 @@ async function renderGraph(
     .attr('d', 'M0,-5L10,0L0,5')
     .attr('fill', '#ccc');
 
-  const node = g.append('g')
-    .selectAll('g')
-    .data(nodes)
-    .join('g')
+  // Cast needed: d3's .join() returns BaseType|SVGGElement but drag is typed for SVGGElement only.
+  const node = (g.append('g').selectAll('g').data(nodes).join('g') as d3.Selection<SVGGElement, typeof nodes[0], SVGGElement, unknown>)
     .call(
       d3.drag<SVGGElement, typeof nodes[0]>()
         .on('start', (event, d) => {
@@ -175,9 +173,20 @@ export function GraphView() {
       {error && <p className="graph-view__error">{error}</p>}
 
       {graph && (
-        <p className="graph-view__stats">
-          {graph.nodes.length} nodes · {graph.edges.length} edges
-        </p>
+        <>
+          <p className="graph-view__stats">
+            {graphType === 'calls'
+              ? `Call graph rooted at "${root}" · ${graph.nodes.length} nodes · ${graph.edges.length} edges · depth ${depth}`
+              : `Import dependency graph · ${graph.nodes.length} files · ${graph.edges.length} edges`}
+          </p>
+          <div className="graph-view__legend">
+            <span className="graph-view__legend-item" style={{ color: 'var(--c-fn)' }}>● function</span>
+            <span className="graph-view__legend-item" style={{ color: 'var(--c-method)' }}>● method</span>
+            <span className="graph-view__legend-item" style={{ color: 'var(--c-cls)' }}>● class</span>
+            <span className="graph-view__legend-item" style={{ color: '#f0a030' }}>● file</span>
+            <span className="graph-view__legend-item" style={{ color: '#888' }}>● external</span>
+          </div>
+        </>
       )}
 
       <svg

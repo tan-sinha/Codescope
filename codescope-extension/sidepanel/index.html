@@ -6,7 +6,12 @@
     <title>Codescope</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Visible immediately before JS runs. If you see this text the HTML is loading. -->
+    <div id="root">
+      <div style="padding:16px;font-family:monospace;font-size:12px;color:#888;background:#1e1e2e;min-height:100vh">
+        Codescope loading…
+      </div>
+    </div>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>

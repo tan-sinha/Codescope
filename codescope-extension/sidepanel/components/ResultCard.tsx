@@ -1,3 +1,4 @@
+import { useAppContext } from '../state/AppContext';
 import type { SearchItem, SearchItemType } from '../state/types';
 
 const TYPE: Record<SearchItemType, { icon: string; color: string }> = {
@@ -16,7 +17,7 @@ function contextLine(item: SearchItem): string | null {
     return `Called by: ${item.called_by.slice(0, 3).join(', ')}${item.called_by.length > 3 ? '…' : ''}`;
   }
   if (item.signature) {
-    const bare = item.signature.replace(/^[^(]+/, '').trim(); // "(a, b) → T"
+    const bare = item.signature.replace(/^[^(]+/, '').trim();
     const ret = item.return_type ? ` → ${item.return_type}` : '';
     return bare + ret;
   }
@@ -25,28 +26,36 @@ function contextLine(item: SearchItem): string | null {
 
 interface ResultCardProps {
   item: SearchItem;
-  score: number; // normalised 0-1
+  score: number;
 }
 
 export function ResultCard({ item, score }: ResultCardProps) {
+  const { navigateTo } = useAppContext();
   const { icon, color } = TYPE[item.type];
   const ctx = contextLine(item);
-  const href = item.github_url;
+
+  function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    navigateTo(item.name);
+  }
+
+  function handleGhClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (item.github_url) window.open(item.github_url, '_blank', 'noreferrer');
+  }
 
   return (
-    <a
-      className="result-card"
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      title={item.name}
-    >
-      {/* Row 1: icon · name · score */}
+    <div className="result-card" onClick={handleClick} role="button" tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && navigateTo(item.name)}>
+      {/* Row 1: icon · name · GH link · score */}
       <div className="result-card__row1">
-        <span className="result-card__icon" style={{ color }}>
-          {icon}
-        </span>
+        <span className="result-card__icon" style={{ color }}>{icon}</span>
         <span className="result-card__name">{item.name}</span>
+        {item.github_url && (
+          <button className="result-card__gh" onClick={handleGhClick} title="Open in GitHub">
+            ↗
+          </button>
+        )}
         <span className="result-card__score">{score.toFixed(2)}</span>
       </div>
 
@@ -60,6 +69,6 @@ export function ResultCard({ item, score }: ResultCardProps) {
 
       {/* Row 4: called_by / signature */}
       {ctx && <div className="result-card__ctx">{ctx}</div>}
-    </a>
+    </div>
   );
 }

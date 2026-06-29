@@ -4,24 +4,24 @@ interface FunctionLinkProps {
   name: string;
   file?: string;
   githubUrl?: string;
+  onClick?: (name: string) => void;
 }
 
-export function FunctionLink({ name, githubUrl }: FunctionLinkProps) {
-  const { owner, repo } = useAppContext();
+export function FunctionLink({ name, onClick }: FunctionLinkProps) {
+  const { navigateTo } = useAppContext();
 
-  const href =
-    githubUrl ??
-    `https://github.com/${owner}/${repo}/search?q=${encodeURIComponent(name)}`;
+  function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (onClick) {
+      onClick(name);
+    } else {
+      navigateTo(name);
+    }
+  }
 
   return (
-    <a
-      className="function-link"
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      title={name}
-    >
+    <button className="function-link" onClick={handleClick} title={name}>
       {name}
-    </a>
+    </button>
   );
 }
